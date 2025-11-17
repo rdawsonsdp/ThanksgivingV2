@@ -657,6 +657,7 @@
             <h2>🎂 Product by Day</h2>
             <div class="btn-group">
                 <button onclick="printProductByDayReport()">🖨️ Print Report</button>
+                <button onclick="exportProductByDayPDF()">📄 Download PDF</button>
                 <button onclick="exportProductByDayCSV()">📥 Download CSV</button>
             </div>
             <div id="productByDayContent"></div>
@@ -1724,6 +1725,12 @@
         function exportPDF() {
             const params = getFilterParams();
             const url = `${API_BASE}/export/pdf?${params}`;
+            window.open(url, '_blank');
+        }
+        
+        function exportProductByDayPDF() {
+            const params = getFilterParams();
+            const url = `${API_BASE}/export/product-by-day/pdf?${params}`;
             window.open(url, '_blank');
         }
         

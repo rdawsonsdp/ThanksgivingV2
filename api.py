@@ -909,6 +909,224 @@ def export_pdf():
         }), 500
 
 
+@app.route('/api/export/product-by-day/pdf', methods=['GET'])
+def export_product_by_day_pdf():
+    """Export Product by Day report as PDF."""
+    try:
+        from io import BytesIO
+        from flask import send_file
+        
+        # Get filters from query parameters
+        filters = {
+            'date_start': request.args.get('date_start'),
+            'date_end': request.args.get('date_end'),
+            'product': request.args.get('product'),
+            'pickup_dates': request.args.get('pickup_dates'),
+            'order_type': request.args.get('order_type'),
+        }
+        
+        # Load and filter data
+        try:
+            df = load_data()
+        except Exception as e:
+            rate_limit_response = handle_rate_limit_error(e)
+            if rate_limit_response:
+                return rate_limit_response
+            raise
+        
+        filtered_df = filter_data(df, filters)
+        
+        if len(filtered_df) == 0:
+            return jsonify({
+                "success": False,
+                "error": "No data to export"
+            }), 400
+        
+        # Group data by Due Pickup Date, then by Product Description
+        day_product_map = {}
+        
+        for _, row in filtered_df.iterrows():
+            product = row.get('Product Description', 'Unknown Product')
+            pickup_date = row.get('Due Pickup Date', '')
+            
+            # Format date key
+            date_key = 'No Date'
+            date_display = 'No Date'
+            if pickup_date and pd.notna(pickup_date):
+                try:
+                    if isinstance(pickup_date, pd.Timestamp):
+                        date_obj = pickup_date
+                    else:
+                        date_obj = pd.to_datetime(pickup_date, errors='coerce')
+                    
+                    if pd.notna(date_obj):
+                        date_key = date_obj.strftime('%Y-%m-%d')
+                        # Format date for display with weekday
+                        weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                        weekday = weekdays[date_obj.weekday()]
+                        date_display = date_obj.strftime(f'{weekday}, %b %d, %Y')
+                except:
+                    date_key = str(pickup_date)
+                    date_display = str(pickup_date)
+            
+            # Initialize date group if needed
+            if date_key not in day_product_map:
+                day_product_map[date_key] = {
+                    'date_display': date_display,
+                    'products': {}
+                }
+            
+            # Count products for this date
+            if product not in day_product_map[date_key]['products']:
+                day_product_map[date_key]['products'][product] = 0
+            day_product_map[date_key]['products'][product] += 1
+        
+        # Sort dates ascending (oldest first)
+        sorted_dates = sorted(day_product_map.keys(), key=lambda x: (
+            1 if x == 'No Date' else 0,
+            pd.to_datetime(x, errors='coerce') if x != 'No Date' else pd.Timestamp.min
+        ))
+        
+        # Create PDF in memory
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+        story = []
+        
+        # Styles
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            textColor=colors.HexColor('#1a1a1a'),
+            spaceAfter=20,
+            alignment=1
+        )
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=12,
+            textColor=colors.HexColor('#2c3e50'),
+            spaceAfter=8,
+            spaceBefore=12
+        )
+        normal_style = styles['Normal']
+        
+        # Title
+        title = Paragraph("Product by Day Report", title_style)
+        story.append(title)
+        
+        # Date range info
+        if filters.get('date_start') or filters.get('date_end'):
+            date_range_text = "Date Range: "
+            if filters.get('date_start'):
+                date_range_text += filters['date_start']
+            if filters.get('date_end'):
+                date_range_text += f" to {filters['date_end']}"
+            story.append(Paragraph(date_range_text, normal_style))
+            story.append(Spacer(1, 0.2*inch))
+        
+        # Generate timestamp
+        timestamp = Paragraph(
+            f"Generated: {pd.Timestamp.now().strftime('%B %d, %Y at %I:%M %p')}",
+            normal_style
+        )
+        story.append(timestamp)
+        story.append(Spacer(1, 0.3*inch))
+        
+        # Process each day
+        grand_total = 0
+        for date_key in sorted_dates:
+            day_data = day_product_map[date_key]
+            products = sorted(day_data['products'].keys())
+            
+            # Day header
+            day_header = Paragraph(day_data['date_display'], heading_style)
+            story.append(day_header)
+            story.append(Spacer(1, 0.1*inch))
+            
+            # Products table for this day
+            table_data = [['Product Description', 'Quantity']]  # Header row
+            
+            day_total = 0
+            for product in products:
+                count = day_data['products'][product]
+                day_total += count
+                table_data.append([product, str(count)])
+            
+            # Day total row
+            table_data.append(['Total', str(day_total)])
+            grand_total += day_total
+            
+            # Create table
+            col_widths = [4.5*inch, 1.5*inch]
+            pdf_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+            
+            # Table style
+            table_style_commands = [
+                # Header row
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+                ('TOPPADDING', (0, 0), (-1, 0), 10),
+                
+                # Grid
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                
+                # Default data rows
+                ('FONTSIZE', (0, 1), (-1, -2), 9),
+                
+                # Total row
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#f0f0f0')),
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, -1), (-1, -1), 10),
+                ('TOPPADDING', (0, -1), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, -1), (-1, -1), 8),
+            ]
+            
+            pdf_table.setStyle(TableStyle(table_style_commands))
+            story.append(pdf_table)
+            story.append(Spacer(1, 0.3*inch))
+        
+        # Grand total
+        grand_total_para = Paragraph(
+            f"<b>Total Line Items: {grand_total:,}</b>",
+            ParagraphStyle(
+                'GrandTotal',
+                parent=styles['Normal'],
+                fontSize=12,
+                textColor=colors.HexColor('#1a1a1a'),
+                alignment=1,
+                spaceBefore=12
+            )
+        )
+        story.append(grand_total_para)
+        
+        # Build PDF
+        doc.build(story)
+        buffer.seek(0)
+        
+        # Generate filename
+        filename = f"product_by_day_report_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        
+        return send_file(
+            buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+    
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 def format_cell_value(value, col_name):
     """Format cell value for PDF display."""
     if pd.isna(value) or value is None or value == '':
