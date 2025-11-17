@@ -677,10 +677,9 @@
     </div>
     
     <script>
-        // Use localhost API for local development, or relative path for production
-        const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-            ? 'http://localhost:5001/api' 
-            : window.location.origin + '/api';
+        // API disabled - static mode only (no serverless functions)
+        const STATIC_MODE = true;
+        const API_BASE = null; // Disabled to prevent function invocations
         let currentData = [];
         
         // Initialize on page load
@@ -747,6 +746,10 @@
         
         async function loadDateRanges() {
             try {
+                if (STATIC_MODE || !API_BASE) {
+                    console.warn('API disabled: date-range');
+                    return { min_date: null, max_date: null };
+                }
                 const response = await fetch(`${API_BASE}/date-range`);
                 const result = await response.json();
 
@@ -769,6 +772,10 @@
         
         async function loadPickupDates() {
             try {
+                if (STATIC_MODE || !API_BASE) {
+                    console.warn('API disabled: pickup-dates');
+                    return [];
+                }
                 const response = await fetch(`${API_BASE}/pickup-dates`);
                 const result = await response.json();
                 
@@ -857,6 +864,10 @@
         
         async function loadProducts() {
             try {
+                if (STATIC_MODE || !API_BASE) {
+                    console.warn('API disabled: products');
+                    return [];
+                }
                 const response = await fetch(`${API_BASE}/products`);
                 const result = await response.json();
                 
@@ -1734,6 +1745,10 @@
         
         function exportProductByDayPDF() {
             const params = getFilterParams();
+            if (STATIC_MODE || !API_BASE) {
+                alert('PDF export disabled in static mode');
+                return;
+            }
             const url = `${API_BASE}/export/product-by-day/pdf?${params}`;
             window.open(url, '_blank');
         }
