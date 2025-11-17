@@ -21,6 +21,17 @@ try:
     # Import Flask app
     from app import app
     
+    # Add a simple test route to verify Flask is working
+    @app.route('/test-vercel', methods=['GET'])
+    def test_vercel():
+        from flask import jsonify
+        return jsonify({
+            "status": "ok",
+            "message": "Flask app is working",
+            "cwd": os.getcwd(),
+            "parent_dir": _parent_dir
+        })
+    
     # Export handler for Vercel - Vercel expects 'handler' or 'app'
     handler = app
     
