@@ -40,11 +40,17 @@ def get_credentials():
     
     # Try environment variable first (for Vercel deployment)
     if 'GOOGLE_CREDENTIALS_BASE64' in os.environ:
-        creds_json = json.loads(base64.b64decode(os.environ['GOOGLE_CREDENTIALS_BASE64']))
-        return Credentials.from_service_account_info(creds_json, scopes=SCOPES)
+        try:
+            creds_b64 = os.environ['GOOGLE_CREDENTIALS_BASE64']
+            creds_json = json.loads(base64.b64decode(creds_b64))
+            return Credentials.from_service_account_info(creds_json, scopes=SCOPES)
+        except Exception as e:
+            raise Exception(f"Failed to decode GOOGLE_CREDENTIALS_BASE64: {str(e)}")
     
     # Fallback to file (for local development)
     creds_path = os.path.join(os.path.dirname(__file__), "long-canto-360620-6858c5a01c13.json")
+    if not os.path.exists(creds_path):
+        raise Exception(f"Credentials file not found: {creds_path}. Set GOOGLE_CREDENTIALS_BASE64 environment variable for Vercel deployment.")
     return Credentials.from_service_account_file(creds_path, scopes=SCOPES)
 
 
@@ -584,14 +590,26 @@ def get_products():
 
 
 def handle_rate_limit_error(e):
-    """Handle Google Sheets API rate limit errors."""
+    """Handle Google Sheets API rate limit and authentication errors."""
     error_str = str(e)
+    
+    # Rate limit errors
     if '429' in error_str or 'RATE_LIMIT' in error_str or 'RESOURCE_EXHAUSTED' in error_str:
         return jsonify({
             "success": False,
             "error": "Google Sheets API rate limit exceeded (60 requests/minute). Please wait a minute and refresh, or request a quota increase at https://cloud.google.com/docs/quotas/help/request_increase",
             "rate_limited": True
         }), 429
+    
+    # Authentication errors
+    if '401' in error_str or 'Unauthorized' in error_str or 'invalid_grant' in error_str or 'Invalid credentials' in error_str:
+        return jsonify({
+            "success": False,
+            "error": "Google Sheets API authentication failed. Please check that GOOGLE_CREDENTIALS_BASE64 environment variable is set correctly in Vercel.",
+            "auth_error": True,
+            "details": "Make sure the credentials are base64-encoded and the service account has access to the spreadsheet."
+        }), 401
+    
     return None
 
 @app.route('/api/date-range', methods=['GET'])
