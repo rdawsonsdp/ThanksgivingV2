@@ -292,6 +292,18 @@ def filter_data(df, filters):
     return filtered_df
 
 
+@app.route('/', methods=['GET'])
+def index():
+    """Serve the frontend index page."""
+    from flask import send_from_directory
+    return send_from_directory('public', 'index.html')
+
+@app.route('/<path:path>')
+def serve_static(path):
+    """Serve static files from public directory."""
+    from flask import send_from_directory
+    return send_from_directory('public', path)
+
 @app.route('/api/health', methods=['GET'])
 def health():
     """Health check endpoint."""
