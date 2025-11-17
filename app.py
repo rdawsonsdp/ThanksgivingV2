@@ -3,24 +3,86 @@ Flask API for Sales Dashboard
 Deployable on Vercel as serverless functions
 """
 
-from flask import Flask, jsonify, request, send_file
-from flask_cors import CORS
-import pandas as pd
-import gspread
-from google.oauth2.service_account import Credentials
-from datetime import datetime
+import logging
+import sys
+import traceback
 import os
-import io
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+
+# Configure verbose logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stderr
+)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# Log startup
+logger.info("=" * 80)
+logger.info("Starting Flask application...")
+logger.info(f"Python version: {sys.version}")
+logger.info(f"Working directory: {os.getcwd()}")
+logger.info(f"Python path: {sys.path[:5]}")  # First 5 entries
+
+try:
+    from flask import Flask, jsonify, request, send_file
+    logger.info("✓ Flask imported successfully")
+except Exception as e:
+    logger.error(f"✗ Failed to import Flask: {e}")
+    logger.error(traceback.format_exc())
+    raise
+
+try:
+    from flask_cors import CORS
+    logger.info("✓ flask_cors imported successfully")
+except Exception as e:
+    logger.error(f"✗ Failed to import flask_cors: {e}")
+    logger.error(traceback.format_exc())
+    raise
+
+try:
+    import pandas as pd
+    logger.info("✓ pandas imported successfully")
+except Exception as e:
+    logger.error(f"✗ Failed to import pandas: {e}")
+    logger.error(traceback.format_exc())
+    raise
+
+try:
+    import gspread
+    logger.info("✓ gspread imported successfully")
+except Exception as e:
+    logger.error(f"✗ Failed to import gspread: {e}")
+    logger.error(traceback.format_exc())
+    raise
+
+try:
+    from google.oauth2.service_account import Credentials
+    logger.info("✓ google.oauth2 imported successfully")
+except Exception as e:
+    logger.error(f"✗ Failed to import google.oauth2: {e}")
+    logger.error(traceback.format_exc())
+    raise
+
+try:
+    from datetime import datetime
+    import io
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    logger.info("✓ All other imports successful")
+except Exception as e:
+    logger.error(f"✗ Failed to import other dependencies: {e}")
+    logger.error(traceback.format_exc())
+    raise
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend
+logger.info("✓ Flask app created")
 
 # Google Sheets configuration
 SPREADSHEET_ID = "1YAHO5rHhFVEReyAuxa7r2SDnoH7BnDfsmSEZ1LyjB8A"
@@ -38,19 +100,43 @@ def get_credentials():
     import json
     import base64
     
+    logger.info("Getting credentials...")
+    logger.info(f"Environment variables available: {list(os.environ.keys())[:10]}...")  # First 10
+    
     # Try environment variable first (for Vercel deployment)
     if 'GOOGLE_CREDENTIALS_BASE64' in os.environ:
+        logger.info("Found GOOGLE_CREDENTIALS_BASE64 in environment")
         try:
             creds_b64 = os.environ['GOOGLE_CREDENTIALS_BASE64']
-            creds_json = json.loads(base64.b64decode(creds_b64))
-            return Credentials.from_service_account_info(creds_json, scopes=SCOPES)
+            logger.info(f"Credentials length: {len(creds_b64)} characters")
+            logger.info(f"First 50 chars: {creds_b64[:50]}...")
+            
+            decoded = base64.b64decode(creds_b64)
+            logger.info(f"Decoded length: {len(decoded)} bytes")
+            
+            creds_json = json.loads(decoded)
+            logger.info(f"Parsed JSON successfully. Keys: {list(creds_json.keys())}")
+            
+            creds = Credentials.from_service_account_info(creds_json, scopes=SCOPES)
+            logger.info("✓ Credentials created successfully from environment variable")
+            return creds
         except Exception as e:
+            logger.error(f"✗ Failed to decode GOOGLE_CREDENTIALS_BASE64: {e}")
+            logger.error(traceback.format_exc())
             raise Exception(f"Failed to decode GOOGLE_CREDENTIALS_BASE64: {str(e)}")
     
     # Fallback to file (for local development)
+    logger.info("GOOGLE_CREDENTIALS_BASE64 not found, trying file...")
     creds_path = os.path.join(os.path.dirname(__file__), "long-canto-360620-6858c5a01c13.json")
+    logger.info(f"Looking for credentials file at: {creds_path}")
+    logger.info(f"File exists: {os.path.exists(creds_path)}")
+    
     if not os.path.exists(creds_path):
-        raise Exception(f"Credentials file not found: {creds_path}. Set GOOGLE_CREDENTIALS_BASE64 environment variable for Vercel deployment.")
+        error_msg = f"Credentials file not found: {creds_path}. Set GOOGLE_CREDENTIALS_BASE64 environment variable for Vercel deployment."
+        logger.error(f"✗ {error_msg}")
+        raise Exception(error_msg)
+    
+    logger.info("✓ Loading credentials from file")
     return Credentials.from_service_account_file(creds_path, scopes=SCOPES)
 
 
@@ -63,29 +149,45 @@ def load_data():
     """Load and merge data from Google Sheets with caching."""
     global _data_cache, _cache_timestamp
     
+    logger.info("load_data() called")
     import time
     current_time = time.time()
     
     # Return cached data if available and not expired
     if _data_cache is not None and _cache_timestamp is not None:
         if current_time - _cache_timestamp < CACHE_DURATION:
+            logger.info(f"Returning cached data (age: {current_time - _cache_timestamp:.1f}s)")
             return _data_cache
     
     try:
+        logger.info("Getting credentials...")
         creds = get_credentials()
+        logger.info("✓ Credentials obtained")
+        
+        logger.info("Authorizing gspread client...")
         client = gspread.authorize(creds)
+        logger.info("✓ Client authorized")
         
         # Read Customer Orders
+        logger.info(f"Opening spreadsheet: {SPREADSHEET_ID}")
         spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        logger.info(f"Opening worksheet: {CUSTOMER_ORDERS_SHEET_NAME}")
         orders_sheet = spreadsheet.worksheet(CUSTOMER_ORDERS_SHEET_NAME)
+        logger.info("Reading customer orders data...")
         # Get all records as strings first to preserve date formats
         customer_orders_data = orders_sheet.get_all_records()
+        logger.info(f"✓ Read {len(customer_orders_data)} customer orders")
         customer_orders_df = pd.DataFrame(customer_orders_data)
+        logger.info(f"✓ Created DataFrame. Shape: {customer_orders_df.shape}")
         
         # Read Bakery Products
+        logger.info(f"Opening worksheet: {BAKERY_PRODUCTS_SHEET_NAME}")
         products_sheet = spreadsheet.worksheet(BAKERY_PRODUCTS_SHEET_NAME)
+        logger.info("Reading bakery products data...")
         bakery_products_data = products_sheet.get_all_records()
+        logger.info(f"✓ Read {len(bakery_products_data)} bakery products")
         bakery_products_df = pd.DataFrame(bakery_products_data)
+        logger.info(f"✓ Created DataFrame. Shape: {bakery_products_df.shape}")
         
         # Ensure date columns are read as strings/text
         date_columns = ['Order Date', 'Due Pickup Date', 'Pickup Timestamp', 'Due Date']
@@ -115,14 +217,19 @@ def load_data():
             merged_df = customer_orders_df
         
         # Cache the result
+        logger.info("Caching merged data...")
         _data_cache = merged_df
         _cache_timestamp = current_time
+        logger.info(f"✓ Data cached. Final shape: {merged_df.shape}")
         
         return merged_df
     
     except Exception as e:
+        logger.error(f"✗ Error loading data: {e}")
+        logger.error(traceback.format_exc())
         # If we have cached data, return it even if there's an error
         if _data_cache is not None:
+            logger.info("Returning cached data due to error")
             return _data_cache
         raise Exception(f"Error loading data: {str(e)}")
 
@@ -316,6 +423,9 @@ def test():
 @app.route('/api/data', methods=['GET'])
 def get_data():
     """Get filtered order data."""
+    logger.info("=" * 80)
+    logger.info("API /api/data called")
+    logger.info(f"Request args: {dict(request.args)}")
     try:
         # Get filters from query parameters
         filters = {
@@ -325,11 +435,16 @@ def get_data():
             'pickup_dates': request.args.get('pickup_dates'),
             'order_type': request.args.get('order_type'),
         }
+        logger.info(f"Filters: {filters}")
         
         # Load data
+        logger.info("Loading data...")
         try:
             df = load_data()
+            logger.info(f"✓ Data loaded successfully. Shape: {df.shape}")
         except Exception as e:
+            logger.error(f"✗ Failed to load data: {e}")
+            logger.error(traceback.format_exc())
             rate_limit_response = handle_rate_limit_error(e)
             if rate_limit_response:
                 return rate_limit_response
@@ -1186,45 +1301,53 @@ def format_cell_value(value, col_name):
 @app.route('/', methods=['GET'])
 def index():
     """Serve the frontend index page."""
+    logger.info("Root route (/) called")
     from flask import Response
     import os
     
-    # Get the directory where this file is located
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    public_dir = os.path.join(current_dir, 'public')
-    index_path = os.path.join(public_dir, 'index.html')
-    
-    # Try to read the file
     try:
+        # Get the directory where this file is located
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        logger.info(f"Current directory (from __file__): {current_dir}")
+        logger.info(f"Working directory (os.getcwd()): {os.getcwd()}")
+        
+        public_dir = os.path.join(current_dir, 'public')
+        index_path = os.path.join(public_dir, 'index.html')
+        logger.info(f"Looking for index.html at: {index_path}")
+        logger.info(f"File exists: {os.path.exists(index_path)}")
+        
+        # Try to read the file
         if os.path.exists(index_path):
+            logger.info("✓ Found index.html at primary path")
             with open(index_path, 'r', encoding='utf-8') as f:
                 content = f.read()
+            logger.info(f"✓ Read index.html successfully ({len(content)} characters)")
             return Response(content, mimetype='text/html; charset=utf-8')
         else:
             # Try alternative paths
+            logger.info("Primary path not found, trying alternatives...")
             alt_paths = [
                 os.path.join(os.getcwd(), 'public', 'index.html'),
                 'public/index.html',
                 './public/index.html',
             ]
             for alt_path in alt_paths:
+                logger.info(f"Trying: {alt_path} (exists: {os.path.exists(alt_path)})")
                 if os.path.exists(alt_path):
+                    logger.info(f"✓ Found index.html at alternative path: {alt_path}")
                     with open(alt_path, 'r', encoding='utf-8') as f:
                         content = f.read()
                     return Response(content, mimetype='text/html; charset=utf-8')
             
             # Return error with debug info
-            return Response(
-                f"index.html not found. Current dir: {os.getcwd()}, __file__: {__file__}, checked: {index_path}, {alt_paths}",
-                status=404,
-                mimetype='text/plain'
-            )
+            error_msg = f"index.html not found. Current dir: {os.getcwd()}, __file__: {__file__}, checked: {index_path}, {alt_paths}"
+            logger.error(f"✗ {error_msg}")
+            return Response(error_msg, status=404, mimetype='text/plain')
     except Exception as e:
-        return Response(
-            f"Error reading index.html: {str(e)}. Current dir: {os.getcwd()}, __file__: {__file__}",
-            status=500,
-            mimetype='text/plain'
-        )
+        error_msg = f"Error reading index.html: {str(e)}. Current dir: {os.getcwd()}, __file__: {__file__}"
+        logger.error(f"✗ {error_msg}")
+        logger.error(traceback.format_exc())
+        return Response(error_msg, status=500, mimetype='text/plain')
 
 @app.route('/<path:path>')
 def serve_static(path):
