@@ -295,7 +295,16 @@ def filter_data(df, filters):
 @app.route('/api/health', methods=['GET'])
 def health():
     """Health check endpoint."""
-    return jsonify({"status": "ok"})
+    return jsonify({"status": "ok", "message": "Flask app is working"})
+
+@app.route('/test', methods=['GET'])
+def test():
+    """Test endpoint to verify Flask is working."""
+    return jsonify({
+        "status": "ok",
+        "message": "Test endpoint working",
+        "routes": [str(rule) for rule in app.url_map.iter_rules()]
+    })
 
 
 @app.route('/api/data', methods=['GET'])
