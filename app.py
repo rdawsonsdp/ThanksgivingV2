@@ -1168,14 +1168,36 @@ def format_cell_value(value, col_name):
 @app.route('/', methods=['GET'])
 def index():
     """Serve the frontend index page."""
-    from flask import send_from_directory, send_file
+    from flask import send_file, Response
     import os
-    public_dir = os.path.join(os.path.dirname(__file__), 'public')
-    index_path = os.path.join(public_dir, 'index.html')
-    if os.path.exists(index_path):
-        return send_file(index_path)
-    else:
-        return "Frontend not found. Please ensure index.html exists in the public directory.", 404
+    
+    # Try multiple possible paths for the public directory
+    possible_paths = [
+        os.path.join(os.path.dirname(__file__), 'public', 'index.html'),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'public', 'index.html'),
+        'public/index.html',
+        './public/index.html',
+    ]
+    
+    for index_path in possible_paths:
+        if os.path.exists(index_path):
+            try:
+                return send_file(index_path)
+            except Exception as e:
+                # If send_file fails, try reading and returning the content
+                try:
+                    with open(index_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    return Response(content, mimetype='text/html')
+                except:
+                    continue
+    
+    # If all paths fail, return a helpful error message
+    return Response(
+        f"Frontend not found. Checked paths: {possible_paths}. Current dir: {os.getcwd()}, __file__: {__file__}",
+        status=404,
+        mimetype='text/plain'
+    )
 
 @app.route('/<path:path>')
 def serve_static(path):
