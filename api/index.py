@@ -10,6 +10,26 @@ import traceback
 _import_error = None
 _parent_dir = None
 
+# Initialize Flask app first for error handling
+from flask import Flask, jsonify
+error_app = Flask(__name__)
+
+def create_error_handler(error_msg, error_type, error_tb, parent_dir_val):
+    """Create an error handler Flask app"""
+    @error_app.route('/', defaults={'path': ''})
+    @error_app.route('/<path:path>')
+    def error_handler(path):
+        return jsonify({
+            "error": f"Failed to load Flask app: {error_msg}",
+            "type": error_type,
+            "traceback": error_tb,
+            "path": path,
+            "parent_dir": parent_dir_val or 'unknown',
+            "cwd": os.getcwd(),
+            "sys_path": list(sys.path[:5])  # First 5 entries
+        }), 500
+    return error_app
+
 try:
     # Add parent directory to path to import app
     _parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -24,7 +44,6 @@ try:
     # Add a simple test route to verify Flask is working
     @app.route('/test-vercel', methods=['GET'])
     def test_vercel():
-        from flask import jsonify
         return jsonify({
             "status": "ok",
             "message": "Flask app is working",
@@ -37,30 +56,12 @@ try:
     
 except Exception as e:
     # Store error info
-    _import_error = {
-        "message": str(e),
-        "type": type(e).__name__,
-        "traceback": traceback.format_exc()
-    }
+    error_msg = str(e)
+    error_type = type(e).__name__
+    error_tb = traceback.format_exc()
     
-    # Create error handler Flask app
-    from flask import Flask, jsonify
-    
-    error_app = Flask(__name__)
-    
-    @error_app.route('/', defaults={'path': ''})
-    @error_app.route('/<path:path>')
-    def error_handler(path):
-        error_info = _import_error or {"message": "Unknown error", "type": "Unknown", "traceback": ""}
-        return jsonify({
-            "error": f"Failed to load Flask app: {error_info['message']}",
-            "type": error_info['type'],
-            "traceback": error_info['traceback'],
-            "path": path,
-            "parent_dir": _parent_dir or 'unknown',
-            "cwd": os.getcwd(),
-            "sys_path": sys.path[:5]  # First 5 entries
-        }), 500
+    # Create error handler
+    create_error_handler(error_msg, error_type, error_tb, _parent_dir)
     
     handler = error_app
     app = error_app
