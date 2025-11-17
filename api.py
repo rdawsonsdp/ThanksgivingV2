@@ -34,7 +34,16 @@ SCOPES = [
 
 
 def get_credentials():
-    """Get Google Sheets credentials."""
+    """Get Google Sheets credentials from environment variable or file."""
+    import json
+    import base64
+    
+    # Try environment variable first (for Vercel deployment)
+    if 'GOOGLE_CREDENTIALS_BASE64' in os.environ:
+        creds_json = json.loads(base64.b64decode(os.environ['GOOGLE_CREDENTIALS_BASE64']))
+        return Credentials.from_service_account_info(creds_json, scopes=SCOPES)
+    
+    # Fallback to file (for local development)
     creds_path = os.path.join(os.path.dirname(__file__), "long-canto-360620-6858c5a01c13.json")
     return Credentials.from_service_account_file(creds_path, scopes=SCOPES)
 
