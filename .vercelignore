@@ -22,6 +22,9 @@ run_local.sh
 DEPLOYMENT.md
 README.md
 VERCEL_ENV_VARIABLES.md
+VERCEL_SIZE_OPTIMIZATION.md
+VERCEL_TROUBLESHOOTING.md
+DEPLOYMENT_OPTIONS.md
 *.egg-info/
 build/
 dist/
@@ -31,3 +34,6 @@ dist/
 htmlcov/
 .git/
 .gitignore
+api/test.py
+index.py
+Procfile
