@@ -896,6 +896,10 @@
         
         async function loadOrderTypes() {
             try {
+                if (STATIC_MODE || !API_BASE) {
+                    console.warn('API calls disabled in static mode');
+                    return { data: [], summary: { totalOrders: 0, totalRevenue: 0 } };
+                }
                 const response = await fetch(`${API_BASE}/data`);
                 const result = await response.json();
                 
@@ -1171,8 +1175,8 @@
                 
                 // Load summary and data in parallel
                 const [summaryRes, dataRes] = await Promise.all([
-                    fetch(`${API_BASE}/summary?${params}`),
-                    fetch(`${API_BASE}/data?${params}`)
+                    STATIC_MODE || !API_BASE ? Promise.resolve({ json: () => ({ totalOrders: 0, totalRevenue: 0 }) }) : fetch(`${API_BASE}/summary?${params}`),
+                    STATIC_MODE || !API_BASE ? Promise.resolve({ json: () => ({ data: [] }) }) : fetch(`${API_BASE}/data?${params}`)
                 ]);
                 
                 // Check for rate limit errors
