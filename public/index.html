@@ -1738,6 +1738,10 @@
         }
         
         function exportPDF() {
+            if (STATIC_MODE || !API_BASE) {
+                alert('PDF export disabled in static mode');
+                return;
+            }
             const params = getFilterParams();
             const url = `${API_BASE}/export/pdf?${params}`;
             window.open(url, '_blank');
