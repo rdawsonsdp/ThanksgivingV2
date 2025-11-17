@@ -1,9 +1,10 @@
 {
   "version": 2,
-  "rewrites": [
+  "builds": [],
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "/api/index"
+      "src": "/(.*)",
+      "dest": "/public/$1"
     }
   ]
 }
