@@ -26,6 +26,7 @@ wheels/
 # Google Sheets credentials - DO NOT COMMIT
 *.json
 !requirements.txt
+!vercel.json
 
 # Reports
 reports/
