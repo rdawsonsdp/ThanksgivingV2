@@ -3,65 +3,113 @@ Flask API for Sales Dashboard
 Deployable on Vercel as serverless functions
 """
 
-import logging
 import sys
 import traceback
 import os
 
-# Configure verbose logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stderr
-)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# Print to stderr immediately (before logging is set up) to catch early errors
+def emergency_log(message):
+    """Log to stderr immediately, even if logging isn't set up."""
+    print(f"[EMERGENCY] {message}", file=sys.stderr, flush=True)
 
-# Log startup
-logger.info("=" * 80)
-logger.info("Starting Flask application...")
-logger.info(f"Python version: {sys.version}")
-logger.info(f"Working directory: {os.getcwd()}")
-logger.info(f"Python path: {sys.path[:5]}")  # First 5 entries
+try:
+    emergency_log("=" * 80)
+    emergency_log("Starting Flask application initialization...")
+    emergency_log(f"Python version: {sys.version}")
+    emergency_log(f"Working directory: {os.getcwd()}")
+    emergency_log(f"Python path: {sys.path[:5]}")
+    
+    import logging
+    
+    # Configure verbose logging
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        stream=sys.stderr
+    )
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    
+    # Log startup
+    logger.info("=" * 80)
+    logger.info("Starting Flask application...")
+    logger.info(f"Python version: {sys.version}")
+    logger.info(f"Working directory: {os.getcwd()}")
+    logger.info(f"Python path: {sys.path[:5]}")  # First 5 entries
+    
+except Exception as e:
+    emergency_log(f"CRITICAL: Failed to set up logging: {e}")
+    emergency_log(traceback.format_exc())
+    raise
 
 try:
     from flask import Flask, jsonify, request, send_file
     logger.info("✓ Flask imported successfully")
 except Exception as e:
-    logger.error(f"✗ Failed to import Flask: {e}")
-    logger.error(traceback.format_exc())
+    error_msg = f"✗ Failed to import Flask: {e}"
+    emergency_log(error_msg)
+    emergency_log(traceback.format_exc())
+    try:
+        logger.error(error_msg)
+        logger.error(traceback.format_exc())
+    except:
+        pass
     raise
 
 try:
     from flask_cors import CORS
     logger.info("✓ flask_cors imported successfully")
 except Exception as e:
-    logger.error(f"✗ Failed to import flask_cors: {e}")
-    logger.error(traceback.format_exc())
+    error_msg = f"✗ Failed to import flask_cors: {e}"
+    emergency_log(error_msg)
+    emergency_log(traceback.format_exc())
+    try:
+        logger.error(error_msg)
+        logger.error(traceback.format_exc())
+    except:
+        pass
     raise
 
 try:
     import pandas as pd
     logger.info("✓ pandas imported successfully")
 except Exception as e:
-    logger.error(f"✗ Failed to import pandas: {e}")
-    logger.error(traceback.format_exc())
+    error_msg = f"✗ Failed to import pandas: {e}"
+    emergency_log(error_msg)
+    emergency_log(traceback.format_exc())
+    try:
+        logger.error(error_msg)
+        logger.error(traceback.format_exc())
+    except:
+        pass
     raise
 
 try:
     import gspread
     logger.info("✓ gspread imported successfully")
 except Exception as e:
-    logger.error(f"✗ Failed to import gspread: {e}")
-    logger.error(traceback.format_exc())
+    error_msg = f"✗ Failed to import gspread: {e}"
+    emergency_log(error_msg)
+    emergency_log(traceback.format_exc())
+    try:
+        logger.error(error_msg)
+        logger.error(traceback.format_exc())
+    except:
+        pass
     raise
 
 try:
     from google.oauth2.service_account import Credentials
     logger.info("✓ google.oauth2 imported successfully")
 except Exception as e:
-    logger.error(f"✗ Failed to import google.oauth2: {e}")
-    logger.error(traceback.format_exc())
+    error_msg = f"✗ Failed to import google.oauth2: {e}"
+    emergency_log(error_msg)
+    emergency_log(traceback.format_exc())
+    try:
+        logger.error(error_msg)
+        logger.error(traceback.format_exc())
+    except:
+        pass
     raise
 
 try:
@@ -76,8 +124,14 @@ try:
     from openpyxl.styles import Font, PatternFill, Alignment
     logger.info("✓ All other imports successful")
 except Exception as e:
-    logger.error(f"✗ Failed to import other dependencies: {e}")
-    logger.error(traceback.format_exc())
+    error_msg = f"✗ Failed to import other dependencies: {e}"
+    emergency_log(error_msg)
+    emergency_log(traceback.format_exc())
+    try:
+        logger.error(error_msg)
+        logger.error(traceback.format_exc())
+    except:
+        pass
     raise
 
 app = Flask(__name__)
@@ -1377,8 +1431,34 @@ def serve_static(path):
 
 # Export handler for Vercel
 # Vercel expects the Flask app to be accessible as 'app' or 'handler'
-handler = app
-__all__ = ['app', 'handler']
+try:
+    handler = app
+    __all__ = ['app', 'handler']
+    emergency_log("✓ Handler exported successfully")
+    logger.info("✓ Handler exported successfully")
+except Exception as e:
+    error_msg = f"CRITICAL: Failed to export handler: {e}"
+    emergency_log(error_msg)
+    emergency_log(traceback.format_exc())
+    # Create a minimal error app as fallback
+    try:
+        from flask import Flask, jsonify
+        error_app = Flask(__name__)
+        @error_app.route('/', defaults={'path': ''})
+        @error_app.route('/<path:path>')
+        def error_handler(path):
+            return jsonify({
+                "error": f"Failed to initialize Flask app: {str(e)}",
+                "traceback": traceback.format_exc(),
+                "path": path
+            }), 500
+        handler = error_app
+        app = error_app
+        emergency_log("✓ Error handler app created as fallback")
+    except Exception as e2:
+        emergency_log(f"CRITICAL: Failed to create error handler: {e2}")
+        emergency_log(traceback.format_exc())
+        raise
 
 # For local development and traditional hosting (Railway, Render, etc.)
 if __name__ == '__main__':
