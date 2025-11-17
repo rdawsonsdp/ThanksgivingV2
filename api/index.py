@@ -1,69 +1,65 @@
 """
 Vercel serverless function entry point
-Imports the Flask app from the parent directory
+Minimal Flask app for testing
 """
 import sys
-import os
 import traceback
+import os
 
-# Always create error app first - this must succeed
-from flask import Flask, jsonify
-error_app = Flask(__name__)
+# Print to stderr immediately
+def emergency_log(message):
+    print(f"[EMERGENCY] {message}", file=sys.stderr, flush=True)
 
-# Store error info globally
-_import_error = None
-_parent_dir = None
+emergency_log("=" * 80)
+emergency_log("api/index.py: Starting...")
+emergency_log(f"Python version: {sys.version}")
+emergency_log(f"Working directory: {os.getcwd()}")
+emergency_log(f"Python path: {sys.path[:3]}")
 
-def setup_error_handler(error_msg, error_type, error_tb, parent_dir_val):
-    """Setup error handler routes"""
+try:
+    from flask import Flask, jsonify
+    
+    # Create minimal Flask app
+    app = Flask(__name__)
+    
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def handler(path):
+        emergency_log(f"Handler called with path: {path}")
+        if path == 'api/health' or path == 'health':
+            return jsonify({
+                "status": "ok",
+                "message": "API is running",
+                "path": path
+            })
+        return jsonify({
+            "status": "ok",
+            "message": "Flask app is running on Vercel",
+            "path": path,
+            "endpoints": ["/api/health"]
+        })
+    
+    # Export for Vercel
+    handler = app
+    
+    emergency_log("✓ Flask app created and handler exported")
+    
+except Exception as e:
+    emergency_log(f"CRITICAL ERROR: {e}")
+    emergency_log(traceback.format_exc())
+    
+    # Create error handler
+    from flask import Flask, jsonify
+    error_app = Flask(__name__)
+    
     @error_app.route('/', defaults={'path': ''})
     @error_app.route('/<path:path>')
     def error_handler(path):
         return jsonify({
-            "error": f"Failed to load Flask app: {error_msg}",
-            "type": error_type,
-            "traceback": error_tb,
-            "path": path,
-            "parent_dir": parent_dir_val or 'unknown',
-            "cwd": os.getcwd(),
-            "sys_path": list(sys.path[:5])  # First 5 entries
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "path": path
         }), 500
-
-# Try to import the main Flask app
-try:
-    # Add parent directory to path to import app
-    _parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    sys.path.insert(0, _parent_dir)
     
-    # Change to parent directory so relative imports work
-    os.chdir(_parent_dir)
-    
-    # Import Flask app - this might fail if dependencies are missing
-    from app import app
-    
-    # Add a simple test route to verify Flask is working
-    @app.route('/test-vercel', methods=['GET'])
-    def test_vercel():
-        return jsonify({
-            "status": "ok",
-            "message": "Flask app is working",
-            "cwd": os.getcwd(),
-            "parent_dir": _parent_dir
-        })
-    
-    # Export handler for Vercel - Vercel expects 'handler' or 'app'
-    handler = app
-    
-except Exception as e:
-    # If import fails, use error app
-    error_msg = str(e)
-    error_type = type(e).__name__
-    error_tb = traceback.format_exc()
-    
-    # Setup error handler
-    setup_error_handler(error_msg, error_type, error_tb, _parent_dir)
-    
-    # Export error handler
     handler = error_app
     app = error_app
-
