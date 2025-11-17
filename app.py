@@ -1181,7 +1181,9 @@ def serve_static(path):
         return send_from_directory(public_dir, 'index.html')
 
 # Export handler for Vercel
+# Vercel expects the Flask app to be accessible as 'app' or 'handler'
 handler = app
+__all__ = ['app', 'handler']
 
 # For local development
 if __name__ == '__main__':

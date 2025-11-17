@@ -8,8 +8,12 @@
   ],
   "routes": [
     {
+      "src": "/api/(.*)",
+      "dest": "/app.py"
+    },
+    {
       "src": "/(.*)",
-      "dest": "app.py"
+      "dest": "/app.py"
     }
   ],
   "functions": {
