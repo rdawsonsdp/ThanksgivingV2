@@ -50,10 +50,18 @@ The app is configured to deploy on Vercel using their native Python/Flask suppor
 ### Troubleshooting:
 
 If you see "Function Invocation Failed":
-1. Check Vercel logs for specific error messages
+1. **Check Vercel logs** (see VERCEL_LOGS.md for details):
+   - Go to Vercel Dashboard → Your Project → Functions → app.py
+   - Or: Deployments → Latest Deployment → Function Logs
+   - Look for detailed error messages and tracebacks
 2. Verify `GOOGLE_CREDENTIALS_BASE64` is set correctly
 3. Ensure all dependencies in `requirements.txt` are compatible
 4. Check that `app.py` exports `app` or `handler` (it does)
+
+**Where to find logs:**
+- **Dashboard:** https://vercel.com/dashboard → Your Project → Functions
+- **CLI:** `vercel logs [your-project-url] --follow`
+- **Function Logs:** Click on a specific function invocation to see detailed logs
 
 ### Testing Locally:
 
